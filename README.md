@@ -1,0 +1,2 @@
+# dnepercoin-core
+Useless
