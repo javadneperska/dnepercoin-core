@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.Caching;
 using System.Text;
@@ -19,6 +20,25 @@ namespace dnepercoin_core
 
         public static Action<IPAddress> PeerJoined = null;
         public static Action<string> PeerLeft = null;
+
+        public static IPAddress[] GetAllLocalIPv4()
+        {
+            List<IPAddress> ipAddrList = new List<IPAddress>();
+            foreach (NetworkInterface item in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (item.OperationalStatus == OperationalStatus.Up)
+                {
+                    foreach (UnicastIPAddressInformation ip in item.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            ipAddrList.Add(ip.Address);
+                        }
+                    }
+                }
+            }
+            return ipAddrList.ToArray();
+        }
 
         public static void Start()
         {
@@ -58,7 +78,8 @@ namespace dnepercoin_core
                              )
                 )
                 {
-                    if(System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces().Any(x => x.GetIPProperties().))
+                    if (GetAllLocalIPv4().Any(x => x.Equals(from.Address)))
+                        continue;
                     if (PeerJoined != null) PeerJoined(from.Address);
                 }
 
