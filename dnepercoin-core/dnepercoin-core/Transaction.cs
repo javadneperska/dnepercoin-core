@@ -20,7 +20,7 @@ namespace dnepercoin_core
         public Transaction()
         {
             target = new byte[20];
-            source = new byte[20];
+            source = new byte[72];
         }
 
         public static Transaction FromBytes(byte[] data, bool partOfBlock = true)
@@ -74,7 +74,8 @@ namespace dnepercoin_core
             output.AddRange(BitConverter.GetBytes(amount));
             output.AddRange(BitConverter.GetBytes(timestamp));
             output.AddRange(signature);
-            return output.ToArray();
+            originalData = output.ToArray();
+            return originalData;
         }
     }
 }
