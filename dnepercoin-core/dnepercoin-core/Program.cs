@@ -21,7 +21,12 @@ namespace dnepercoin_core
         public static List<IPAddress> Clients = new List<IPAddress>();
         static void Main(string[] args)
         {
-            //Task.Run(() => Serve());
+            bool isMining = false;
+            Thread miningThread = new Thread(() => Mine());
+
+            Console.WriteLine("Starting node server...");
+
+            Task.Run(() => Serve());
 
             Discoverer.PeerJoined = x => Connect(x);
             Discoverer.PeerLeft = x => Disconnect(x);
@@ -29,33 +34,35 @@ namespace dnepercoin_core
 
             Task.Delay(5000).Wait();
 
-            //Task.Run(() => Update());
+            Task.Run(() => Update());
 
             Task.Delay(5000).Wait();
 
             if (!File.Exists("privatekey.txt"))
             {
+                Console.WriteLine("Generating key...");
                 CngKeyCreationParameters keyCreationParameters = new CngKeyCreationParameters();
                 keyCreationParameters.ExportPolicy = CngExportPolicies.AllowPlaintextExport;
                 keyCreationParameters.KeyUsage = CngKeyUsages.Signing;
 
                 CngKey key = CngKey.Create(CngAlgorithm.ECDsaP256, null, keyCreationParameters);
 
-                ECDsaCng dsa = new ECDsaCng(key); //dsa = Digital Signature Algorithm
+                ECDsaCng dsa = new ECDsaCng(key);
                 byte[] privateKey = dsa.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
                 File.WriteAllText("privatekey.txt", String.Join(",", privateKey));
             }
 
             CngKey importedKey = CngKey.Import(File.ReadAllText("privatekey.txt").Split(',').Select(m => byte.Parse(m)).ToArray(), CngKeyBlobFormat.EccPrivateBlob);
             ECDsaCng importedDSA = new ECDsaCng(importedKey);
+
             byte[] publicKey = importedDSA.Key.Export(CngKeyBlobFormat.EccPublicBlob);
+
             byte[] pubKeyHash = new byte[20];
-            bool isMining = false;
-            Thread miningThread = new Thread(() => Mine());
             using (SHA1 sha1 = SHA1.Create())
             {
                 pubKeyHash = sha1.ComputeHash(publicKey);
             }
+
             Console.Write("Address: ");
             for (int i = 0; i < 20; i++) 
             {
@@ -105,6 +112,8 @@ namespace dnepercoin_core
 
                                 data = newsock.Receive(ref ipep);
                             }
+
+                            Swarm.Add(tx);
                             break;
                         }
                     case "mine":
