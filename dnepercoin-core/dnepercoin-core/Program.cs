@@ -13,7 +13,7 @@ namespace dnepercoin_core
 {
     class Program
     {
-        public static uint GlobalDifficulty = 12;
+        public static uint GlobalDifficulty = 24;
         public static byte[] LastBlockHash = null;
         public static Dictionary<byte[], double> Balances = new Dictionary<byte[], double>(new ByteArrayComparer());
         public static List<Block> Blocks = new List<Block>();
@@ -69,7 +69,7 @@ namespace dnepercoin_core
             Console.WriteLine();
 
             bool isMining = false;
-            Thread miningThread = new Thread(() => Mine(pubKeyHash));
+            Thread miningThread = null;
 
             while (true)
             {
@@ -127,6 +127,7 @@ namespace dnepercoin_core
                             else
                             {
                                 Console.WriteLine("Started mining.");
+                                miningThread = new Thread(() => Mine(pubKeyHash));
                                 miningThread.Start();
                             }
                             isMining = !isMining;
@@ -301,12 +302,58 @@ namespace dnepercoin_core
                 {
                     var block = new Block();
                     block.previousBlockHash = LastBlockHash;
+                    if (block.previousBlockHash == null)
+                        block.previousBlockHash = new byte[32];
                     block.difficulty = GlobalDifficulty;
                     block.timestamp = (uint)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
                     block.rewardTarget = address;
                     block.transactions.AddRange(Swarm);
                     block.SetupTransactionHash();
                     block.nonce = 0;
+                    while (block.nonce < ulong.MaxValue)
+                    {
+                        var header = block.CreateHeader();
+                        var hash = sha.ComputeHash(header);
+
+                        bool good = true;
+                        for (int i = 0; i < block.difficulty; i++)
+                        {
+                            int b = 0, j = i;
+                            while (j > 7)
+                            {
+                                b++;
+                                j -= 8;
+                            }
+
+                            if ((hash[b] & (1 << (7 - j))) != 0)
+                                good = false;
+                        }
+                        if (good)
+                        {
+                            Console.Write("Found block - hash: 0x");                            
+                            Console.WriteLine(BitConverter.ToString(hash).Replace("-", string.Empty));
+                            double prev = 0;
+                            if (Balances.ContainsKey(address))
+                                prev = Balances[address];
+                            Console.WriteLine("Previous balance: " + prev + " now: " + (prev + 10));
+
+                            foreach(var tx in block.transactions)
+                                Swarm.Remove(tx);
+
+                            var fin = new List<byte>();
+                            fin.AddRange(header);
+                            fin.AddRange(block.transactionData);
+                            var blk = Block.FromBytes(fin.ToArray());
+                            if (blk != null)
+                                Blocks.Add(blk);
+
+                            Console.Write("> ");
+
+                            break;
+                        }
+
+                        block.nonce++;
+                    }
                 }
             }
         }
