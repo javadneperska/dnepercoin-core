@@ -90,6 +90,8 @@ namespace dnepercoin_core
                 block.transactions.Add(transaction);
             }
 
+            if (!Program.Balances.ContainsKey(block.rewardTarget))
+                Program.Balances[block.rewardTarget] = 0;
             Program.Balances[block.rewardTarget] += 10;
 
             Program.LastBlockHash = blockHash;
