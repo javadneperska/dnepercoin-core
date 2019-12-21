@@ -115,5 +115,17 @@ namespace dnepercoin_core
                 transactionHash = sha256.ComputeHash(transactionData);
             }
         }
+
+        public byte[] CreateHeader()
+        {
+            List<byte> header = new List<byte>();
+            header.AddRange(rewardTarget);
+            header.AddRange(BitConverter.GetBytes(nonce));
+            header.AddRange(BitConverter.GetBytes(timestamp));
+            header.AddRange(BitConverter.GetBytes(difficulty));
+            header.AddRange(previousBlockHash);
+            header.AddRange(transactionHash);
+            return header.ToArray();
+        }
     }
 }
