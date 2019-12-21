@@ -1,2 +1,3 @@
 # dnepercoin-core
-Useless
+A simple educational cryptocurrency<br/>
+![Value](dnepercoin.jpg)
