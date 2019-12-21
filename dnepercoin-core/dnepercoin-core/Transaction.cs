@@ -39,6 +39,9 @@ namespace dnepercoin_core
             if (transaction.amount > Program.Balances[transaction.source])
                 return null;
 
+            if (transaction.amount <= 0)
+                return null;
+
             var publicKey = CngKey.Import(transaction.source, CngKeyBlobFormat.EccPublicBlob);
             var publicKeyChecker = new ECDsaCng(publicKey);
             if (!publicKeyChecker.VerifyData(data, 0, 104, transaction.signature, HashAlgorithmName.SHA256))
