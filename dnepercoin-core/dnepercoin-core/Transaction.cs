@@ -52,6 +52,8 @@ namespace dnepercoin_core
                 using (SHA1 sha1 = SHA1.Create())
                 {
                     Program.Balances[sha1.ComputeHash(transaction.source)] -= transaction.amount;
+                    if (!Program.Balances.ContainsKey(transaction.target))
+                        Program.Balances[transaction.target] = 0;
                     Program.Balances[transaction.target] += transaction.amount;
                 }
             }
