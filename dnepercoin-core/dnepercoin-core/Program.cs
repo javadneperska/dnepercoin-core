@@ -21,8 +21,6 @@ namespace dnepercoin_core
         public static List<IPAddress> Clients = new List<IPAddress>();
         static void Main(string[] args)
         {
-            bool isMining = false;
-            Thread miningThread = new Thread(() => Mine());
 
             Console.WriteLine("Starting node server...");
 
@@ -69,6 +67,9 @@ namespace dnepercoin_core
                 Console.Write(pubKeyHash[i].ToString("X"));
             }
             Console.WriteLine();
+
+            bool isMining = false;
+            Thread miningThread = new Thread(() => Mine(pubKeyHash));
 
             while (true)
             {
@@ -292,13 +293,20 @@ namespace dnepercoin_core
             }
         }
 
-        static void Mine()
+        static void Mine(byte[] address)
         {
             using (SHA256 sha = SHA256.Create())
             {
                 while (true)
                 {
-                    
+                    var block = new Block();
+                    block.previousBlockHash = LastBlockHash;
+                    block.difficulty = GlobalDifficulty;
+                    block.timestamp = (uint)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
+                    block.rewardTarget = address;
+                    block.transactions.AddRange(Swarm);
+                    block.SetupTransactionHash();
+                    block.nonce = 0;
                 }
             }
         }

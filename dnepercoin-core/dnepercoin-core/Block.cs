@@ -20,6 +20,7 @@ namespace dnepercoin_core
         public ulong numTransactions;
         public List<Transaction> transactions;
 
+        public byte[] transactionData;
         public byte[] originalData;
 
         public Block()
@@ -94,6 +95,25 @@ namespace dnepercoin_core
             Program.LastBlockHash = blockHash;
 
             return block;
+        }
+
+        public void SetupTransactionHash()
+        {
+            List<byte> transactionBytes = new List<byte>();
+            numTransactions = (ulong)transactions.Count;
+            transactionBytes.AddRange(BitConverter.GetBytes(numTransactions));
+            foreach (var tx in transactions)
+            {
+                if (tx.originalData == null)
+                    tx.GetBytesTotal();
+                transactionBytes.AddRange(BitConverter.GetBytes((ushort)tx.originalData.Length));
+                transactionBytes.AddRange(tx.originalData);
+            }
+            transactionData = transactionBytes.ToArray();
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                transactionHash = sha256.ComputeHash(transactionData);
+            }
         }
     }
 }
