@@ -92,11 +92,16 @@ namespace dnepercoin_core
 
             if (!Program.Balances.ContainsKey(block.rewardTarget))
                 Program.Balances[block.rewardTarget] = 0;
-            Program.Balances[block.rewardTarget] += 10;
+            Program.Balances[block.rewardTarget] += GetBlockReward();
 
             Program.LastBlockHash = blockHash;
 
             return block;
+        }
+
+        public static double GetBlockReward()
+        {
+            return 10.0 / Math.Pow(2, Math.Floor(((double)Program.Blocks.Count) / 259200.0));
         }
 
         public void SetupTransactionHash()

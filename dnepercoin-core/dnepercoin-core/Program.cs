@@ -335,7 +335,7 @@ namespace dnepercoin_core
                             double prev = 0;
                             if (Balances.ContainsKey(address))
                                 prev = Balances[address];
-                            Console.WriteLine("Previous balance: " + prev + " now: " + (prev + 10));
+                            Console.WriteLine("Previous balance: " + prev + " now: " + (prev + Block.GetBlockReward()));
 
                             foreach(var tx in block.transactions)
                                 Swarm.Remove(tx);
