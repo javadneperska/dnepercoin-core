@@ -45,10 +45,16 @@ namespace dnepercoin_core
             Array.Copy(data, 68, block.transactionHash, 0, 32);
 
             if (block.difficulty < Program.GlobalDifficulty)
+            {
+                Console.WriteLine("Difficulty error");
                 return null;
+            }
 
             if (Program.LastBlockHash != null && !block.previousBlockHash.SequenceEqual(Program.LastBlockHash))
+            {
+                Console.WriteLine("Last block hash error");
                 return null;
+            }
 
             byte[] blockHash = null;
             using (SHA256 sha256 = SHA256.Create())
@@ -65,7 +71,10 @@ namespace dnepercoin_core
                     }
 
                     if ((hash[b] & (1 << (7 - j))) != 0)
+                    {
+                        Console.WriteLine("Hash error");
                         return null;
+                    }
                 }
 
                 blockHash = hash;
@@ -73,7 +82,10 @@ namespace dnepercoin_core
                 byte[] transactionHash = sha256.ComputeHash(data, 100, data.Length - 100);
 
                 if (!block.transactionHash.SequenceEqual(transactionHash))
+                {
+                    Console.WriteLine("Bad transaction hash");
                     return null;
+                }
             }
 
             block.numTransactions = BitConverter.ToUInt64(data, 100);
@@ -86,7 +98,10 @@ namespace dnepercoin_core
                 index += 2 + len;
                 var transaction = Transaction.FromBytes(transactionData);
                 if (transaction == null)
+                {
+                    Console.WriteLine("Invalid transaction received...");
                     continue;
+                }
                 block.transactions.Add(transaction);
             }
 

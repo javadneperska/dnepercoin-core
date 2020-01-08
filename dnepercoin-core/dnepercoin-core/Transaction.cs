@@ -36,26 +36,38 @@ namespace dnepercoin_core
             transaction.signature = new byte[data.Length - 104];
             Array.Copy(data, 104, transaction.signature, 0, data.Length - 104);
 
-            if (transaction.amount > Program.Balances[transaction.source])
+            byte[] pubKeyHash = new byte[20];
+            using (SHA1 sha1 = SHA1.Create())
+            {
+                pubKeyHash = sha1.ComputeHash(transaction.source);
+            }
+
+            if (transaction.amount > Program.Balances[pubKeyHash])
+            {
+                Console.WriteLine("Bad amount - too much");
                 return null;
+            }
 
             if (transaction.amount <= 0)
+            {
+                Console.WriteLine("Bad amount - negative");
                 return null;
+            }
 
             var publicKey = CngKey.Import(transaction.source, CngKeyBlobFormat.EccPublicBlob);
             var publicKeyChecker = new ECDsaCng(publicKey);
             if (!publicKeyChecker.VerifyData(data, 0, 104, transaction.signature, HashAlgorithmName.SHA256))
+            {
+                Console.WriteLine("Bad amount - bad signature");
                 return null;
+            }
 
             if (partOfBlock)
             {
-                using (SHA1 sha1 = SHA1.Create())
-                {
-                    Program.Balances[sha1.ComputeHash(transaction.source)] -= transaction.amount;
+                    Program.Balances[pubKeyHash] -= transaction.amount;
                     if (!Program.Balances.ContainsKey(transaction.target))
                         Program.Balances[transaction.target] = 0;
                     Program.Balances[transaction.target] += transaction.amount;
-                }
             }
 
             return transaction;

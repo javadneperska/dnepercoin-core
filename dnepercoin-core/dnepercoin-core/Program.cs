@@ -13,14 +13,16 @@ namespace dnepercoin_core
 {
     class Program
     {
-        public static uint GlobalDifficulty = 24;
-        public static byte[] LastBlockHash = null;
+        public static uint GlobalDifficulty = 22;
+        public static byte[] LastBlockHash = new byte[32];
         public static Dictionary<byte[], double> Balances = new Dictionary<byte[], double>(new ByteArrayComparer());
         public static List<Block> Blocks = new List<Block>();
         public static List<Transaction> Swarm = new List<Transaction>();
         public static List<IPAddress> Clients = new List<IPAddress>();
         static void Main(string[] args)
         {
+            Clients.Add(IPAddress.Parse("192.168.43.174"));
+            Clients.Add(IPAddress.Parse("192.168.43.47"));
 
             Console.WriteLine("Starting node server...");
 
@@ -61,11 +63,7 @@ namespace dnepercoin_core
                 pubKeyHash = sha1.ComputeHash(publicKey);
             }
 
-            Console.Write("Address: ");
-            for (int i = 0; i < 20; i++) 
-            {
-                Console.Write(pubKeyHash[i].ToString("X"));
-            }
+            Console.Write("Address: " + BitConverter.ToString(pubKeyHash).Replace("-", string.Empty));
             Console.WriteLine();
 
             bool isMining = false;
@@ -78,6 +76,32 @@ namespace dnepercoin_core
                 string[] command = cmd.Split(' ');
                 switch (command[0])
                 {
+                    case "help":
+                        {
+                            Console.WriteLine("help : view help");
+                            Console.WriteLine("tx <address> <amount> : send money");
+                            Console.WriteLine("mine : start/stop mining");
+                            Console.WriteLine("bal [address] : view balance");
+                            break;
+                        }
+                    case "bal":
+                        {
+                            byte[] address = new byte[20];
+                            if (command.Length > 1)
+                            {
+                                for (int i = 0; i < 20; i++)
+                                {
+                                    address[i] = Convert.ToByte(command[1].Substring(i * 2, 2), 16);
+                                }
+                            }
+                            else
+                                address = pubKeyHash;
+                            double balance = 0;
+                            if (Balances.ContainsKey(address))
+                                balance = Balances[address];
+                            Console.WriteLine("Current balance: " + balance);
+                            break;
+                        }
                     case "tx":
                         {
                             if (command.Length != 3 || command[1].Length != 40)
@@ -96,10 +120,14 @@ namespace dnepercoin_core
                             tx.timestamp = (uint)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
                             tx.signature = importedDSA.SignData(tx.GetBytesToSign(), HashAlgorithmName.SHA256);
 
+                            IPEndPoint ipep2 = new IPEndPoint(IPAddress.Any, 6969);
+                            UdpClient newsock = new UdpClient(ipep2);
+                            newsock.Client.ReceiveTimeout = 1000;
+                            newsock.Client.SendTimeout = 1000;
+
                             foreach (IPAddress ip in Clients)
                             {
                                 IPEndPoint ipep = new IPEndPoint(ip, 9050);
-                                UdpClient newsock = new UdpClient(ipep);
                                 byte[] data = null;
 
                                 byte[] transaction = tx.GetBytesTotal();
@@ -108,10 +136,16 @@ namespace dnepercoin_core
                                 packet.Add(0x02);
                                 packet.AddRange(BitConverter.GetBytes((ushort)transaction.Length));
                                 packet.AddRange(transaction);
+                                try
+                                {
+                                    newsock.Send(packet.ToArray(), packet.Count, ipep);
+                                }
+                                catch { continue; }
 
-                                newsock.Send(packet.ToArray(), packet.Count, ipep);
-
+                                try { 
                                 data = newsock.Receive(ref ipep);
+                                }
+                                catch { continue; }
                             }
 
                             Swarm.Add(tx);
@@ -145,15 +179,28 @@ namespace dnepercoin_core
         static void Update()
         {
             Console.WriteLine("Running initial update...");
+            IPEndPoint ipep2 = new IPEndPoint(IPAddress.Any, 8989);
+            UdpClient newsock = new UdpClient(ipep2);
+            newsock.Client.ReceiveTimeout = 1000;
+            newsock.Client.SendTimeout = 1000;
             foreach (IPAddress ip in Clients)
             {
                 IPEndPoint ipep = new IPEndPoint(ip, 9050);
-                UdpClient newsock = new UdpClient(ipep);
                 byte[] data = null;
-
+                try { 
                 newsock.Send(new byte[] { 0x03 }, 1, ipep);
-
+                }
+                catch
+                {
+                    continue;
+                }
+                try { 
                 data = newsock.Receive(ref ipep);
+                }
+                catch
+                {
+                    continue;
+                }
 
                 if (data != null)
                 {
@@ -176,12 +223,23 @@ namespace dnepercoin_core
                 foreach (IPAddress ip in Clients)
                 {
                     IPEndPoint ipep = new IPEndPoint(ip, 9050);
-                    UdpClient newsock = new UdpClient(ipep);
                     byte[] data = null;
 
+                    try { 
                     newsock.Send(new byte[] { 0x00 }, 1, ipep);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
 
+                    try { 
                     data = newsock.Receive(ref ipep);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
 
                     if (data != null)
                     {
@@ -195,9 +253,14 @@ namespace dnepercoin_core
                                 packet.Add(0x01);
                                 packet.AddRange(LastBlockHash);
                                 newsock.Send(packet.ToArray(), packet.Count, ipep);
-
-                                data = newsock.Receive(ref ipep);
-
+                                try
+                                {
+                                    data = newsock.Receive(ref ipep);
+                                }
+                                catch
+                                {
+                                    continue;
+                                }
                                 int len = BitConverter.ToInt32(data, 0);
                                 if (len != 0)
                                 {
@@ -205,18 +268,26 @@ namespace dnepercoin_core
                                     Array.Copy(data, 4, block, 0, len);
                                     var blk = Block.FromBytes(block);
                                     if (blk != null)
+                                    {
                                         Blocks.Add(blk);
+                                    }
                                     else
+                                    {
+                                        Console.WriteLine("Received invalid block");
                                         break;
+                                    }
                                 }
                                 else
+                                {
+                                    Console.WriteLine("Received invalid block hash");
                                     break;
+                                }
                             }
                         }
                     }
                 }
 
-                Task.Delay(5000).Wait();
+                Task.Delay(500).Wait();
             }
         }
         static void Serve()
@@ -224,12 +295,21 @@ namespace dnepercoin_core
             byte[] data = new byte[1024];
             IPEndPoint ipep = new IPEndPoint(IPAddress.Any, 9050);
             UdpClient newsock = new UdpClient(ipep);
+            newsock.Client.ReceiveTimeout = 1000;
+            newsock.Client.SendTimeout = 1000;
 
             while (true)
             {
                 IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
 
-                data = newsock.Receive(ref sender);
+                try
+                {
+                    data = newsock.Receive(ref sender);
+                }
+                catch
+                {
+                    continue;
+                }
 
                 switch (data[0])
                 {
@@ -248,7 +328,7 @@ namespace dnepercoin_core
                         {
                             byte[] prevBlockHash = new byte[32];
                             Array.Copy(data, 1, prevBlockHash, 0, 32);
-                            Block output = Blocks.First(x => x.previousBlockHash.SequenceEqual(prevBlockHash));
+                            Block output = Blocks.FirstOrDefault(x => x.previousBlockHash.SequenceEqual(prevBlockHash));
                             if (output != null)
                             {
                                 List<byte> packet = new List<byte>();
@@ -312,6 +392,12 @@ namespace dnepercoin_core
                     block.nonce = 0;
                     while (block.nonce < ulong.MaxValue)
                     {
+                        if (!LastBlockHash.SequenceEqual(block.previousBlockHash))
+                        {
+                            Console.Write("Someone else mined block...\n> ");
+                            break;
+                        }
+
                         var header = block.CreateHeader();
                         var hash = sha.ComputeHash(header);
 
@@ -345,7 +431,11 @@ namespace dnepercoin_core
                             fin.AddRange(block.transactionData);
                             var blk = Block.FromBytes(fin.ToArray());
                             if (blk != null)
+                            {
                                 Blocks.Add(blk);
+                            }
+                            else
+                                Console.WriteLine("Invalidated block...");
 
                             Console.Write("> ");
 
