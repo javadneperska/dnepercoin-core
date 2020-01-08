@@ -83,7 +83,8 @@ namespace dnepercoin_core
                     if (PeerJoined != null) PeerJoined(from.Address);
                 }
 
-                //Console.WriteLine("CONNECTION TO: " + from.Address.ToString());
+                //if(!Program.Clients.Contains(from.Address))
+                //    Console.WriteLine("CONNECTION TO: " + from.Address.ToString());
             }
         }
     }
