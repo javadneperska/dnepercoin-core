@@ -148,6 +148,8 @@ namespace dnepercoin_core
                                 catch { continue; }
                             }
 
+                            newsock.Close();
+
                             Swarm.Add(tx);
                             break;
                         }

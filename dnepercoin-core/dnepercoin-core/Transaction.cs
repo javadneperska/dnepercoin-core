@@ -70,6 +70,11 @@ namespace dnepercoin_core
                     Program.Balances[transaction.target] += transaction.amount;
             }
 
+            if (Program.Swarm.Any(x => x.signature.SequenceEqual(transaction.signature)))
+            {
+                Program.Swarm.RemoveAll(x => x.signature.SequenceEqual(transaction.signature));
+            }
+
             return transaction;
         }
 
