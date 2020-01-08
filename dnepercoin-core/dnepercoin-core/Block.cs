@@ -90,6 +90,15 @@ namespace dnepercoin_core
                 block.transactions.Add(transaction);
             }
 
+            if ((Program.Blocks.Count % 1000) == 0 && Program.Blocks.Count != 0 && Program.Blocks.Count != 1000)
+            {
+                var change = (block.timestamp - Program.Blocks[Program.Blocks.Count - 1000].timestamp);
+                if (change > 210000)
+                    Program.GlobalDifficulty--;
+                if (change < 90000)
+                    Program.GlobalDifficulty++;
+            }
+
             if (!Program.Balances.ContainsKey(block.rewardTarget))
                 Program.Balances[block.rewardTarget] = 0;
             Program.Balances[block.rewardTarget] += GetBlockReward();
