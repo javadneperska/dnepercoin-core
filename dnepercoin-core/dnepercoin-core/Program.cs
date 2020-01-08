@@ -421,7 +421,7 @@ namespace dnepercoin_core
                             double prev = 0;
                             if (Balances.ContainsKey(address))
                                 prev = Balances[address];
-                            Console.WriteLine("Previous balance: " + prev + " now: " + (prev + Block.GetBlockReward()));
+                            Console.Write("Previous balance: " + prev + " now: ");
 
                             foreach(var tx in block.transactions)
                                 Swarm.Remove(tx);
@@ -433,6 +433,7 @@ namespace dnepercoin_core
                             if (blk != null)
                             {
                                 Blocks.Add(blk);
+                                Console.WriteLine(Balances[address]);
                             }
                             else
                                 Console.WriteLine("Invalidated block...");
