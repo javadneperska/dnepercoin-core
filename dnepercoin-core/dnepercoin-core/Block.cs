@@ -90,6 +90,10 @@ namespace dnepercoin_core
 
             block.numTransactions = BitConverter.ToUInt64(data, 100);
             int index = 108;
+            if (block.numTransactions == 0)
+                Program.EmptyBlocks++;
+            else
+                Program.TotalTransactions += (uint)block.numTransactions;
             for (ulong i = 0; i < block.numTransactions; i++)
             {
                 ushort len = BitConverter.ToUInt16(data, index);
@@ -105,14 +109,16 @@ namespace dnepercoin_core
                 block.transactions.Add(transaction);
             }
 
-            if ((Program.Blocks.Count % 1000) == 0 && Program.Blocks.Count != 0 && Program.Blocks.Count != 1000)
+            /*if ((Program.Blocks.Count % 100) == 0 && Program.Blocks.Count != 0 && Program.Blocks.Count != 100)
             {
-                var change = (block.timestamp - Program.Blocks[Program.Blocks.Count - 1000].timestamp);
-                if (change > 210000)
+                var change = (block.timestamp - Program.Blocks[Program.Blocks.Count - 100].timestamp);
+                Console.WriteLine("Old difficulty: " + Program.GlobalDifficulty);
+                if (change > 4500)
                     Program.GlobalDifficulty--;
-                if (change < 90000)
+                if (change < 2000)
                     Program.GlobalDifficulty++;
-            }
+                Console.WriteLine("Difficulty consensus: " + Program.GlobalDifficulty);
+            }*/
 
             if (!Program.Balances.ContainsKey(block.rewardTarget))
                 Program.Balances[block.rewardTarget] = 0;
@@ -125,7 +131,7 @@ namespace dnepercoin_core
 
         public static double GetBlockReward()
         {
-            return 10.0 / Math.Pow(2, Math.Floor(((double)Program.Blocks.Count) / 259200.0));
+            return 10.0 / Math.Pow(2, Math.Floor(((double)Program.Blocks.Count) / 25920.0));
         }
 
         public void SetupTransactionHash()

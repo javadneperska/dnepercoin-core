@@ -8,22 +8,108 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using uhttpsharp;
+using uhttpsharp.Listeners;
+using uhttpsharp.RequestProviders;
+using uhttpsharp.Headers;
+using uhttpsharp.Handlers;
+using uhttpsharp.Logging;
 
 namespace dnepercoin_core
 {
+    class fix : IHttpRequestHandler
+    {
+        public async Task Handle(IHttpContext context, System.Func<Task> next)
+        {
+            string ach = Program.template;
+            string data = "";
+            foreach (var pair in Program.Balances)
+            {
+                data += "<tr><td>";
+                data += BitConverter.ToString(pair.Key).Replace("-", string.Empty);
+                data += "</td><td>";
+                data += pair.Value;
+                data += "</td></tr>";
+            }
+            ach = ach.Replace("{data}", data);
+
+            ach += "Number of blocks: ";
+            ach += Program.Blocks.Count;
+            ach += "<br>Last block hash: 0x";
+            ach += BitConverter.ToString(Program.LastBlockHash).Replace("-", string.Empty);
+            ach += "<br>Number of confirmed transactions: ";
+            ach += Program.TotalTransactions;
+            ach += "<br>Number of transactions in swarm: ";
+            ach += Program.Swarm.Count;
+            ach += "<br>Difficulty: ";
+            ach += Program.GlobalDifficulty;
+            ach += "<br>Number of empty blocks: ";
+            ach += Program.EmptyBlocks;
+            ach += "<br>Block reward: ";
+            ach += Block.GetBlockReward();
+
+            context.Response = new HttpResponse(HttpResponseCode.Ok, Encoding.ASCII.GetBytes(ach), false);//new HttpResponse(HttpResponseCode.Ok, "text/html", ach, true);//context.Request.Headers.KeepAliveConnection());
+        }
+    }
+    public class NullLoggerProvider : ILogProvider
+    {
+        public static readonly NullLoggerProvider Instance = new NullLoggerProvider();
+
+        private static readonly ILog NullLogInstance = new NullLog();
+
+        public ILog GetLogger(string name)
+        {
+            return NullLogInstance;
+        }
+
+        public IDisposable OpenNestedContext(string message)
+        {
+            return null;
+        }
+
+        public IDisposable OpenMappedContext(string key, string value)
+        {
+            return null;
+        }
+
+        public class NullLog : ILog
+        {
+            public bool Log(LogLevel logLevel, Func<string> messageFunc, Exception exception = null, params object[] formatParameters)
+            {
+                // do nothing
+                return true;
+            }
+        }
+    }
     class Program
     {
-        public static uint GlobalDifficulty = 20;
+        public static uint GlobalDifficulty = 8, TotalTransactions = 0, EmptyBlocks = 0;
         public static byte[] LastBlockHash = new byte[32];
         public static Dictionary<byte[], double> Balances = new Dictionary<byte[], double>(new ByteArrayComparer());
         public static List<Block> Blocks = new List<Block>();
         public static List<Transaction> Swarm = new List<Transaction>();
         public static List<IPAddress> Clients = new List<IPAddress>();
+        public static string template = File.ReadAllText("lul.html");
+        public static bool isMining = false;
+        public static List<Thread> miningThreads = new List<Thread>();
+        public static byte[] pubKeyHash = new byte[20];
+        public static ECDsaCng importedDSA;
+        public static byte[] publicKey;
+        static Program()
+        {
+            LogProvider.LogProviderResolvers.Clear();
+            LogProvider.LogProviderResolvers.Add(
+                new Tuple<LogProvider.IsLoggerAvailable, LogProvider.CreateLogProvider>(() => true,
+                    () => NullLoggerProvider.Instance));
+        }
         static void Main(string[] args)
         {
-            Clients.Add(IPAddress.Parse("192.168.43.174"));
-            Clients.Add(IPAddress.Parse("91.121.50.14"));
+
+            //Clients.Add(IPAddress.Parse("192.168.43.174"));
+            Clients.Add(IPAddress.Parse("192.168.43.153"));
+            //Clients.Add(IPAddress.Parse("91.121.50.14"));
             Clients.Add(IPAddress.Parse("192.168.43.47"));
+            //Clients.Add(IPAddress.Parse("192.168.43.41"));
 
             foreach (var ip in Discoverer.GetAllLocalIPv4())
             {
@@ -39,11 +125,11 @@ namespace dnepercoin_core
             Discoverer.PeerLeft = x => Disconnect(x);
             Discoverer.Start();
 
-            Task.Delay(5000).Wait();
+            Task.Delay(1000).Wait();
 
             Task.Run(() => Update());
 
-            Task.Delay(5000).Wait();
+            Task.Delay(1000).Wait();
 
             if (!File.Exists("privatekey.txt"))
             {
@@ -60,11 +146,10 @@ namespace dnepercoin_core
             }
 
             CngKey importedKey = CngKey.Import(File.ReadAllText("privatekey.txt").Split(',').Select(m => byte.Parse(m)).ToArray(), CngKeyBlobFormat.EccPrivateBlob);
-            ECDsaCng importedDSA = new ECDsaCng(importedKey);
+            importedDSA = new ECDsaCng(importedKey);
 
-            byte[] publicKey = importedDSA.Key.Export(CngKeyBlobFormat.EccPublicBlob);
+            publicKey = importedDSA.Key.Export(CngKeyBlobFormat.EccPublicBlob);
 
-            byte[] pubKeyHash = new byte[20];
             using (SHA1 sha1 = SHA1.Create())
             {
                 pubKeyHash = sha1.ComputeHash(publicKey);
@@ -73,8 +158,46 @@ namespace dnepercoin_core
             Console.Write("Address: " + BitConverter.ToString(pubKeyHash).Replace("-", string.Empty));
             Console.WriteLine();
 
-            bool isMining = false;
-            List<Thread> miningThreads = new List<Thread>();
+
+            var httpServer = new HttpServer(new HttpRequestProvider());
+            var lhgdkg = new TcpListener(IPAddress.Any, 80);
+            //lhgdkg.Server.ReceiveTimeout = 10000;
+            httpServer.Use(new TcpListenerAdapter(lhgdkg));
+
+            Thread abc = new Thread(_ => (new UI()).ShowDialog());
+            abc.Start(null);
+            
+            /*httpServer.Use((a, b) => {
+
+                string ach = Program.template;
+                string data = "";
+                foreach (var pair in Program.Balances)
+                {
+                    data += "<tr><td>";
+                    data += BitConverter.ToString(pair.Key).Replace("-", string.Empty);
+                    data += "</td><td>";
+                    data += pair.Value;
+                    data += "</td></tr>";
+                }
+                ach = ach.Replace("{data}", data);
+                while (true)
+                {
+                    try
+                    {
+                        Thread.Sleep(100);
+                        var tw = new StreamWriter("index.html");
+                        tw.Write(ach);
+                        tw.Close();
+                        break;
+                    }
+                    catch { }
+                }
+                Thread.Sleep(100);
+                //File.WriteAllText("index.html", ach);
+                return b();
+            });*/
+            httpServer.Use(new fix());
+            httpServer.Start();
 
             while (true)
             {
@@ -87,13 +210,14 @@ namespace dnepercoin_core
                         {
                             Console.WriteLine("help : view help");
                             Console.WriteLine("tx <address> <amount> : send money");
-                            Console.WriteLine("mine [threads] : start/stop mining");
+                            Console.WriteLine("mine [threads] [address] : start/stop mining");
                             Console.WriteLine("bal [address] : view balance");
                             Console.WriteLine("exit : close the program");
                             break;
                         }
                     case "exit":
                         {
+                            httpServer.Dispose();
                             Environment.Exit(0);
                             break;
                         }
@@ -155,6 +279,9 @@ namespace dnepercoin_core
 
                             foreach (IPAddress ip in Clients)
                             {
+                                if (Discoverer.GetAllLocalIPv4().Contains(ip))
+                                    continue;
+
                                 IPEndPoint ipep = new IPEndPoint(ip, 53418);
                                 byte[] data = null;
 
@@ -199,10 +326,24 @@ namespace dnepercoin_core
                             {
                                 Console.WriteLine("Started mining.");
                                 ulong nonceOffset = ulong.MaxValue / threads;
+                                byte[] address = new byte[20];
+                                if (command.Length > 2)
+                                {
+                                    for (int i = 0; i < 20; i++)
+                                    {
+                                        address[i] = Convert.ToByte(command[2].Substring(i * 2, 2), 16);
+                                    }
+                                }
+                                else
+                                    address = pubKeyHash;
+                                Random r = new Random();
                                 for (ulong i = 0; i < threads; i++)
                                 {
-                                    Thread miningThread = new Thread(() => Mine(pubKeyHash, i * nonceOffset));
-                                    miningThread.Start();
+                                    Thread miningThread = new Thread((param) => Mine(address, (ulong)param));
+                                    byte[] nonce = new byte[8];
+                                    r.NextBytes(nonce);
+                                    nonce[7] = (byte)i;
+                                    miningThread.Start(BitConverter.ToUInt64(nonce, 0));
                                     miningThreads.Add(miningThread);
                                 }
                             }
@@ -263,10 +404,13 @@ namespace dnepercoin_core
                 }
             }
             int j = 0;
+            var stuff = Discoverer.GetAllLocalIPv4();
             while (true)
             {
                 foreach (IPAddress ip in Clients)
                 {
+                    if (stuff.Contains(ip))
+                        continue;
                     IPEndPoint ipep = new IPEndPoint(ip, 53418);
                     byte[] data = null;
 
@@ -328,17 +472,33 @@ namespace dnepercoin_core
                                 {
                                     Console.WriteLine("Received invalid block hash");
                                     LastBlockHash = Blocks[Blocks.Count - 1].previousBlockHash;
-                                    Blocks.Remove(Blocks[Blocks.Count - 1]);
+                                    var toBeReverted = Blocks[Blocks.Count - 1];
+                                    foreach (var tx in toBeReverted.transactions)
+                                    {
+                                        byte[] pubKeyHash = new byte[20];
+                                        using (SHA1 sha1 = SHA1.Create())
+                                        {
+                                            pubKeyHash = sha1.ComputeHash(tx.source);
+                                        }
+                                        Balances[pubKeyHash] += tx.amount;
+                                        Balances[tx.target] -= tx.amount;
+                                    }
+                                    Balances[toBeReverted.rewardTarget] -= Block.GetBlockReward();
+                                    if (toBeReverted.numTransactions == 0)
+                                        EmptyBlocks--;
+                                    else
+                                        TotalTransactions -= (uint)toBeReverted.numTransactions;
+                                    Blocks.Remove(toBeReverted);
                                     break;
                                 }
                             }
                         }
                     }
-                    Task.Delay(20).Wait();
+                    Task.Delay(10).Wait();
                 }
 
-                Task.Delay(500).Wait();
-                if (j < 30)
+                Task.Delay(20).Wait();
+                /*if (j < 30)
                     j++;
                 else
                 {
@@ -379,8 +539,8 @@ namespace dnepercoin_core
                         }
                         Task.Delay(20).Wait();
                     }
-                }
-                Task.Delay(500).Wait();
+                }*/
+                //Task.Delay(500).Wait();
             }
         }
         static void Serve()
@@ -481,7 +641,25 @@ namespace dnepercoin_core
             }
         }
 
-        static void Mine(byte[] address, ulong startNonce)
+        static bool FastCheck(byte[] a, byte[] b, ulong nonce)
+        {
+            for (int i = 0; i < 30; i++)
+            {
+                ulong chk = (ulong)(1 << i);
+                int c = (29 - i);
+                ulong mod = nonce & (ulong)(0x3FFFFFFF >> c);
+                if (mod != chk)
+                {
+                    if (a[c] != b[c])
+                        return false;
+                }
+                else
+                    return true;
+            }
+            return true;
+        }
+
+        public static void Mine(byte[] address, ulong startNonce)
         {
             using (SHA256 sha = SHA256.Create())
             {
@@ -496,13 +674,16 @@ namespace dnepercoin_core
                     block.rewardTarget = address;
                     block.transactions.AddRange(Swarm);
                     block.SetupTransactionHash();
-                    block.nonce = 0;
+                    block.nonce = startNonce;
                     while (block.nonce < ulong.MaxValue)
                     {
-                        if (!LastBlockHash.SequenceEqual(block.previousBlockHash))
+                        if (!FastCheck(LastBlockHash, block.previousBlockHash, block.nonce))//(!LastBlockHash.SequenceEqual(block.previousBlockHash))
                         {
-                            if(!Blocks[Blocks.Count - 1].rewardTarget.SequenceEqual(address))
-                                Console.Write("Someone else mined block...\n> ");
+                            if (startNonce == 0)
+                            {
+                                if (!Blocks[Blocks.Count - 1].rewardTarget.SequenceEqual(address))
+                                    Console.Write("Someone else mined block...\n> ");
+                            }
                             break;
                         }
 
@@ -550,7 +731,7 @@ namespace dnepercoin_core
 
                             break;
                         }
-
+                        Thread.Sleep(10);
                         block.nonce++;
                     }
                 }
